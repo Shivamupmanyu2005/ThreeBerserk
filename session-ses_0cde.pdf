@@ -1,0 +1,761 @@
+# Image particle burst state machine
+
+**Session ID:** ses_0cdebc350ffeRA9EvCSqkILiFL
+**Created:** 7/5/2026, 5:10:14 PM
+**Updated:** 7/5/2026, 5:26:24 PM
+
+---
+
+## User
+
+Yes. You can build that with pure Three.js particles, no shader needed.
+And yes, we can use the same ideology you already learned.
+The effect:
+JPEG image
+→ crack appears
+→ image bursts into particles
+→ particles spread across page and float
+→ after a few seconds particles return
+→ image reforms
+→ repeat
+This can be done with:
+Canvas image sampling
+BufferGeometry particles
+start positions
+burst positions
+animation progress
+state machine
+No shader required.
+Core Mental Model
+Same as your text particles:
+Each particle has:
+  home position = where it belongs in the image
+  burst position = where it flies during explosion
+Then one animation value controls:
+0 = image formed
+1 = image exploded
+Use lerp():
+particle position = lerp(homePosition, burstPosition, explodeAmount)
+That’s the whole heart of it.
+Workflow
+Load JPEG texture/image.
+
+Draw the image onto a hidden 2D canvas.
+
+Sample pixels from the canvas.
+
+For each sampled pixel:
+create one particle
+store image/home position
+store pixel color
+store random burst position
+
+Create THREE.Points.
+
+In animation loop:
+formed state: particles sit in image shape
+cracking state: maybe shake or split along crack line
+burst state: particles fly outward
+floating state: particles drift slowly
+return state: particles lerp back home
+repeat
+
+Important Data Arrays
+You will need arrays like:
+positions
+homePositions
+burstPositions
+colors
+randomSeeds
+Meaning:
+positions:
+  current particle positions used by Three.js
+
+homePositions:
+  where particles form the image
+
+burstPositions:
+  where particles go when exploded
+
+colors:
+  color copied from JPEG pixel
+
+randomSeeds:
+  unique random values for floating/wobble
+State Machine
+This is the big concept.
+Instead of one hover boolean, this animation repeats automatically.
+Use states:
+FORMED
+CRACKING
+BURSTING
+FLOATING
+RETURNING
+Noob meaning:
+FORMED:
+  image is normal
+
+CRACKING:
+  particles around crack shift slightly
+
+BURSTING:
+  particles move toward burst positions
+
+FLOATING:
+  particles hover around spread positions
+
+RETURNING:
+  particles move back to image positions
+Then repeat.
+Timing Example
+0s - 1s:
+  image formed
+
+1s - 2s:
+  crack appears / shake begins
+
+2s - 3.5s:
+  burst outward
+
+3.5s - 5s:
+  particles float
+
+5s - 6.5s:
+  return to image
+
+6.5s:
+  repeat
+Crack Without Shader
+Since no shader, the crack can be faked using particles.
+You can do:
+define a jagged crack line through the image
+For each particle, check:
+is this particle near the crack line?
+If yes:
+push it slightly left/right/up/down
+make it brighter/white
+shake it
+That creates the illusion of a crack.
+No need to actually draw a crack texture.
+Crack Concept
+Create a jagged line:
+start near top
+go downward with random x offsets
+Then for each particle:
+find how close particle is to crack line
+if close:
+  crackInfluence = strong
+else:
+  crackInfluence = weak/zero
+During cracking phase:
+particle position += crackDirection * crackInfluence
+This makes a split.
+Burst Concept
+For every particle, create a burst target:
+burstX = homeX + random direction * random distance
+burstY = homeY + random direction * random distance
+burstZ = homeZ + random depth
+For page-wide spread:
+burstX across viewport width
+burstY across viewport height
+burstZ closer/farther
+If you want dramatic burst:
+particles near crack move first
+particles far from crack move later
+That makes the crack feel like it causes the explosion.
+Floating Concept
+After burst, do not freeze particles.
+Use sine/cosine with seeds:
+particleX = burstX + sin(time + seed) * smallAmount
+particleY = burstY + cos(time + seed) * smallAmount
+Noob meaning:
+Each particle gently floats differently.
+Return Concept
+After floating:
+particle position = lerp(current/burst position, home position, returnProgress)
+Then reset to formed.
+Where To Put It In Three.js
+You can make this as a new group:
+imageParticleGroup
+Or a new THREE.Points.
+It can be:
+in world space
+or:
+attached to camera
+If you want it to spread across the webpage/screen, camera-attached is easier.
+Like:
+camera.add(imageParticles)
+Then positions are screen-like.
+What You Should Build First
+Do not start with crack.
+Build in this order:
+Make particles form the JPEG image.
+Make them explode outward.
+Make them return.
+Add repeat timing.
+Add floating motion.
+Add crack influence.
+Add particle colors from image.
+That order matters. Crack is the fancy part. Get the image-particle loop working first.
+Pseudocode
+load jpeg image
+
+draw image to hidden canvas
+
+for every N pixels:
+  read pixel color
+
+  create particle
+
+  homePosition:
+    x = pixel x mapped to Three.js width
+    y = pixel y mapped to Three.js height
+    z = 0
+
+  burstPosition:
+    x = random across screen
+    y = random across screen
+    z = random depth
+
+  color:
+    use pixel color
+
+  seed:
+    random number
+
+create BufferGeometry
+set position attribute
+set color attribute
+
+create PointsMaterial with vertex colors
+create THREE.Points
+add to scene/camera
+
+animation loop:
+  get cycle time
+
+  if cycle phase is FORMED:
+    particles stay home
+
+  if CRACKING:
+    particles near crack shift slightly
+
+  if BURSTING:
+    particles lerp from home to burst
+
+  if FLOATING:
+    particles stay near burst plus sine/cos movement
+
+  if RETURNING:
+    particles lerp from burst back to home
+
+  update position buffer
+  mark needsUpdate true
+Same Ideology As Your Current Work
+Your previous text effect:
+text pixels → particle home positions
+hover → particles move to sigil positions
+leave → particles return
+This image effect:
+image pixels → particle home positions
+time cycle → particles move to burst positions
+after delay → particles return
+Same brain.
+Only difference:
+text effect is hover-controlled
+image burst is time-controlled
+What You Should Handle Yourself
+You can build:
+image canvas sampling
+particle arrays
+home/burst positions
+animation state machine
+lerp movement
+floating sine motion
+repeat timing i am doing this cureently you can read @src/App.jsx LET ME PASTE WHERE I AM if (imagePointMaterial) {
+         imagePointMaterial.opacity = handOfGodReveal * 0.35
+      }
+
+      restMaterial.opacity = handOfGodReveal ;  I CAN SEE BOTH ALLIGNED NOW YOU GUIDE ME WITH NOT CODE BUT CONCEPTUALLY AND MAKE ME THINK AND HELP ME TO LEARN YOU CAN BE STRICT 
+
+---
+
+## Assistant (Build · Big Pickle · 17.9s)
+
+_Thinking:_
+
+The user wants me to guide them conceptually (not give them code) to build an image burst particle effect with Three.js. They already have some image particles working (the `rest.png` image is being sampled and displayed as particles). They want to add:
+
+1. A state machine (FORMED, CRACKING, BURSTING, FLOATING, RETURNING)
+2. Burst positions
+3. Floating motion
+4. Crack effect
+5. Repeat timing
+
+Let me look at what they already have - they're loading `rest.png`, sampling pixels, creating particles at line 58-116. The particles are currently static (just sit in image form). They have `imagePointMaterial.opacity` being controlled by `handOfGodReveal`.
+
+Let me think about what concepts to explain:
+
+1. They already have `homePositions` (the current positions array). They need to add `burstPositions` array.
+2. They need a state machine with timing.
+3. They need to update positions in the animation loop based on state.
+
+Let me guide them step by step, conceptually, without writing code.
+
+Key things to make them think about:
+
+1. **Burst positions**: Each particle needs a random destination. The current positions array stores home. They need a parallel array for where particles go when exploding.
+
+2. **State machine**: Instead of one `textDissolve` value, they need a state variable and a timer. Each state has a duration. When timer exceeds duration, advance to next state.
+
+3. **Lerp animation**: `explodeAmount` goes 0→1 during bursting, 1→0 during returning. Particle position = lerp(home, burst, explodeAmount).
+
+4. **Floating**: After burst, don't freeze. Add sine/cosine offset based on time and seed.
+
+5. **Crack**: Compute distance from each particle to a crack line. Particles near crack get pushed aside during CRACKING phase.
+
+Let me structure my guidance to make them think through each part themselves.
+
+I see what you have. Good foundation — you're already sampling `rest.png` into particles with colors. Now let's walk through the next steps conceptually.
+
+**Think about this:**
+
+Your current particles only have one "mode" — they sit in image form. You need to add a second set of destinations (`burstPositions`) and a state machine to drive movement between them.
+
+**Ask yourself these questions:**
+
+1. **Where do your burst positions live?** You have `positions` (home). Where will you store where each particle flies to during explosion? Same length, same structure — just random per-particle targets spread across the screen.
+
+2. **How do you track time?** Your loop already has `time` and `delta`. How will you measure "how long have we been in the current state"? You need a variable like `stateTimer` that resets when the state changes.
+
+3. **What drives the lerp?** In your text particles, `textDissolve` (0→1) drives everything. For the burst, you need a value that goes 0→1 during BURSTING, stays 1 during FLOATING, then goes 1→0 during RETURNING. That single value is the core — everything else is just choosing what to lerp between.
+
+4. **How does the crack work without a shader?** Don't think about drawing a line. Think: for each particle, compute its distance to an imaginary jagged line. During CRACKING phase, particles *near* the line get offset perpendicular to it. That's it — no texture, just math.
+
+5. **Floating is just noise.** After burst, you don't want frozen particles. You want `position = burstPosition + sin(time * speed + seed) * amplitude` per particle. Each seed makes it unique.
+
+**Your current code has `textDissolve` as a single float.** The image burst needs a similar float — call it `explodeAmount` — but driven by a timer state machine instead of mouse hover.
+
+**The order matters.** Build in this exact sequence before adding crack:
+
+1. Add `burstPositions` array alongside your existing `positions`
+2. Write a state machine (FORMED → BURSTING → FLOATING → RETURNING → REPEAT)
+3. Use `explodeAmount` (driven by state timer) to lerp `positions` between `homePositions` and `burstPositions`
+4. Add floating wobble during FLOATING state
+5. *Then* add crack influence during CRACKING state
+
+Does the mental model of "one float driving everything via lerp" make sense? That's the bridge between your text particles and this new effect.
+
+---
+
+## User
+
+okay so currently we sit where particles and solid image aligned now next smallest step is i have position array now i have to store position of particles after they burst right
+
+---
+
+## Assistant (Plan · Big Pickle · 6.0s)
+
+_Thinking:_
+
+The user is asking a conceptual question to confirm their understanding. They want to know that the next step is to create a `burstPositions` array that stores where each particle goes when it explodes. Let me confirm this and guide them conceptually, staying in read-only/plan mode as instructed.
+
+The user seems to be wanting confirmation and guidance, not code. Let me keep it concise and conceptual.
+
+They currently have `positions` which holds the home (image-formed) positions. The next smallest step is indeed to add a `burstPositions` array so each particle has a destination for the explosion.
+
+Yes. Exactly right.
+
+You've got one array (`positions`) holding where particles sit when they form the image. That's their **home**.
+
+Now you need a second array — call it `burstPositions` — same length, same structure. But instead of sampled pixel coordinates, each entry is a **random** target across the screen.
+
+Every particle then has two identities:
+- where it **belongs** (home)
+- where it **flies** (burst)
+
+And one float (`explodeAmount`) decides which one it shows at any moment.
+
+That's the next smallest concrete step.
+
+---
+
+## User
+
+okay positions-> home and burstPositions->fliesor burst 
+
+---
+
+## Assistant (Plan · Big Pickle · 6.2s)
+
+_Thinking:_
+
+The user is confirming the mental model: `positions` -> home, `burstPositions` -> fly/burst. They want guidance on the next conceptual step. I'm in plan mode (read-only), so I should guide them conceptually and help them think through the next steps without writing code.
+
+Let me respond concisely and help them think about what happens next.
+
+Yes. Now think about when you create each particle in the `onload` loop (around line 86). You already push `positions` (home). Right after that, you can push a random burst target into a parallel `burstPositions` array.
+
+The trick: store them **separately** from the `geometry.attributes.position` array. The geometry attribute holds the *current* position. You read from `burstPositions` and `homePositions` to compute the current position each frame — you don't overwrite them.
+
+So you'll have three concepts in memory:
+- `homePositions` — set once, never changes
+- `burstPositions` — set once, never changes
+- `geometry.attributes.position.array` — written every frame via lerp
+
+Next question for you: **How will you decide what "random across screen" means for burst targets?** That's the design choice you need to make before writing the code. Options:
+- Random within viewport bounds
+- Random with some going deeper (z)
+- Clustered near the crack line vs scattered everywhere
+
+---
+
+## User
+
+man this is overwhelming let's first do the smallest step first
+
+---
+
+## Assistant (Plan · Big Pickle · 6.1s)
+
+_Thinking:_
+
+The user is feeling overwhelmed and wants to take the smallest step first. They're saying "let's first do the smallest step first." And the system reminder says I'm in plan/read-only mode - I must NOT make any edits.
+
+So I should help them identify the absolute smallest next step and plan it out conceptually, without rushing ahead.
+
+The smallest step is: add a `burstPositions` array alongside the existing position sampling in the `onload` callback. That's it. No state machine yet, no lerping, no animation changes. Just: when we create a particle at a pixel position, also generate a random burst position for it and store it somewhere.
+
+Let me think about what to ask the user to help them take this step.
+
+You're right. Smallest possible step:
+
+Just **add the burst positions array** next to where you already sample pixels. Nothing else changes. No state machine, no animation, no lerp yet.
+
+In your `onload` callback around lines 58-92, you already have:
+
+```
+const positions = []
+const colors = []
+```
+
+Smallest step: add `const burstPositions = []` right there. And inside the pixel loop, after pushing home position, also push a **random** xyz burst position.
+
+That's one new array, one new line in the loop. Zero behavioral change yet. Everything still renders the same.
+
+Can you see where that line would go? Structure-wise, right after line 87 where you `push` the home position.
+
+---
+
+## User
+
+restImage.onload = () => {
+      const positions = [];
+      const colors = [];
+      const burstPositions = [];
+
+      sampleCanvas.width = restImage.naturalWidth;
+      sampleCanvas.height = restImage.naturalHeight;
+      sampleContext.drawImage(restImage, 0, 0);
+
+      const imgData = sampleContext.getImageData(
+        0,
+        0,
+        sampleCanvas.width,
+        sampleCanvas.height
+      );
+      const pixels = imgData.data;
+      const height = imgData.height;
+      const width = imgData.width;
+      const step = 4;
+      const scale = restImageScale;
+
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          const index = (y * width + x) * 4;
+          const r = pixels[index];
+          const g = pixels[index + 1];
+          const b = pixels[index + 2];
+          const a = pixels[index + 3];
+
+          if (a > 50) {
+            positions.push((x - width / 2) * scale, -(y - height / 2) * scale, 0);
+            burstPositions.push(x*Math.random()*500*scale, -y*Math.random()*500*scale,0)
+            colors.push(r / 255, g / 255, b / 255);
+          }
+
+        }
+      } 
+
+---
+
+## Assistant (Plan · Big Pickle · 9.5s)
+
+_Thinking:_
+
+The user has taken the step of adding a `burstPositions` array and is populating it with random values in the pixel loop. They're showing me their code. But the system reminder says I'm in read-only/plan mode — I cannot make edits. However, the user is not asking me to edit; they're showing me what they did and want feedback/conceptual guidance.
+
+Let me look at their burst position logic:
+
+`burstPositions.push(x*Math.random()*500*scale, -y*Math.random()*500*scale,0)`
+
+This is a good first attempt, but let me think about what this produces. They're taking the pixel's x position, multiplying by a random value and 500 and scale. This might send particles very far or weirdly positioned.
+
+But conceptually, the important thing is: they **added the array**. The next smallest step would be to use it somehow — but they're right to just add it first.
+
+Now, I should guide them conceptually. The burst positions should ideally be:
+
+1. Random across the screen/viewport, not relative to the pixel position
+2. With some z-depth variation for layering
+
+But I shouldn't overwhelm them. They asked for the smallest step — adding the array — and they did it. I should acknowledge that and ask what they think about the burst position values, or guide them to the next smallest step.
+
+Actually, looking more carefully at the system reminder — it says I'm in read-only/plan mode and cannot make edits. But the user is showing me code they wrote, not asking me to edit. I can still discuss and guide conceptually. I just can't modify files.
+
+Let me look at the current state of things. The user has the burst positions being somewhat dependent on the pixel position (`x * Math.random() * 500 * scale`). This might work but it's better to think about what "burst" means visually.
+
+I should ask them: does this feel right to you? Or guide them to think about what a good burst position looks like.
+
+Actually, I'll keep it simple. They took the step. I'll acknowledge it and help them think about the next conceptual step.
+
+Good. You added the array.
+
+Now think about those burst values. `x * Math.random() * 500 * scale` — what does that produce? Imagine a pixel at the center (x ≈ width/2). Its burst target depends on x, so center pixels and edge pixels have different random ranges. Is that intentional?
+
+For "burst across the whole screen", a cleaner formula is: pick a random point within a fixed range (like viewport width/height), unrelated to the pixel's home position. Each particle picks a fresh random spot anywhere.
+
+But don't change it yet. The important thing is you have the array. Next smallest conceptual step:
+
+**Pick one**: do you want to first verify the burst positions are in the array correctly? (console.log) Or do you want to move toward the next step — using `positions` as the lerp target between home and burst?
+
+---
+
+## User
+
+so the burst position is correct or can be better ?
+
+---
+
+## Assistant (Plan · Big Pickle · 9.4s)
+
+_Thinking:_
+
+The user is asking whether the burst position formula is correct or if it can be better. Let me think about what `burstPositions.push(x*Math.random()*500*scale, -y*Math.random()*500*scale,0)` actually produces.
+
+The home positions are: `(x - width/2) * scale, -(y - height/2) * scale, 0`
+
+So home positions map pixel coordinates to 3D space centered at origin, scaled by `restImageScale` (0.01).
+
+The burst formula: `x * Math.random() * 500 * scale` — where `scale = restImageScale = 0.01`.
+
+So `500 * 0.01 = 5`. So it's `x * random * 5`. For a pixel at x=500 (half of a 1000px wide image), burst could be up to 500 * 5 = 2500. That's huge — way outside viewport. For x=100, it's up to 500.
+
+But it's also asymmetrical — it only goes rightward/positive x, because x is always positive (pixel coords from 0 to width). And the y is always negative because of the minus sign.
+
+So the burst targets are:
+- Always on the right side (positive x)
+- Always below center (negative y)
+- Scaled by the pixel's original x/y position — edge pixels burst farther
+
+That's not necessarily "wrong" — it creates an interesting pattern where particles burst asymmetrically. But it's not what you'd typically want for "burst across entire screen."
+
+A cleaner burst formula would be something like:
+```
+burstX = (Math.random() - 0.5) * viewportWidth * burstSpread
+burstY = (Math.random() - 0.5) * viewportHeight * burstSpread
+burstZ = (Math.random() - 0.5) * depthRange
+```
+
+This makes every particle pick a random spot anywhere in the viewport, independent of its home position.
+
+I should ask the user what kind of effect they want for the burst, and guide them conceptually rather than just giving code.
+
+Your current formula:
+
+```
+burstX = x * Math.random() * 500 * scale
+burstY = -y * Math.random() * 500 * scale
+```
+
+**What this actually produces:**
+- `scale` = `restImageScale` which is... I see it's set to `0.01` at line 52. So `500 * 0.01 = 5`.
+- For a pixel at x=300: burstX could be up to `300 * 5 = 1500`. For a pixel at x=50: up to `250`.
+- All burstX are **positive** (pixels only go right), all burstY are **negative** (always below center).
+- Edge pixels burst farther than center pixels because their x/y is larger.
+
+**Concept question:** Do you want:
+1. **Directional burst** — particles fly roughly outward from where they started (like an explosion center)?
+2. **Random scatter** — every particle picks a random position anywhere, independent of its home?
+
+Your current code is kind of in-between. It depends on home position but with a strong bias toward bottom-right.
+
+What *feeling* do you want the burst to have?
+
+---
+
+## User
+
+directional burst
+
+---
+
+## Assistant (Plan · Big Pickle · 7.8s)
+
+_Thinking:_
+
+The user is in plan mode - I should NOT make any edits. They said they want directional burst, and asked about the burst position formula. I need to stay conceptual and not write code. Let me help them think through what directional burst means.
+
+For directional burst, the concept is:
+- Pick a burst origin point (center of explosion)
+- For each particle, compute a direction vector from its home position to the burst origin
+- The burst target = home position + direction * random distance (or expand outward)
+
+Or alternatively:
+- Each particle moves away from a central point
+- The farther from center, the less/more they move
+
+The key conceptual difference from random scatter: with directional burst, particles move *away* from some origin (like a crack line or center point), so they maintain some spatial relationship instead of going to completely random unrelated positions.
+
+Let me think about what the user needs to consider conceptually.
+
+Good choice. For **directional burst**, the core idea:
+
+Each particle moves **away from a central point** (the crack line or image center). The further a particle is from that origin, the more it flies outward — like a real explosion.
+
+**Conceptual steps to figure out:**
+
+1. **Where is the burst origin?** Center of the image? The crack line? A point you pick?
+
+2. **Direction = normalize(homePosition - origin)**. Each particle gets a unit vector pointing away from the origin. That's unique per particle.
+
+3. **Distance = random range** (e.g. 2 to 8 units). Each particle picks its own "how far to fly."
+
+4. **burstPosition = homePosition + direction * distance**.
+
+This way particles spread radially from the origin, keeping the explosion coherent — not random teleporting.
+
+**Your current formula has no origin, no direction.** It just multiplies x by random. That's not directional.
+
+The question you need to answer: **where is the center of the explosion?**
+
+---
+
+## User
+
+centre is width/2 height/2
+
+---
+
+## Assistant (Plan · Big Pickle · 7.9s)
+
+_Thinking:_
+
+The user said the center is width/2, height/2. But I need to be careful here - I'm in plan mode (read-only). The system reminder says I must NOT make any edits or run non-readonly tools. I can only observe, analyze, and plan.
+
+Let me help them think through the formula conceptually. The origin is (width/2, height/2) in pixel space. To convert to their 3D space, they'd use the same mapping they already have for home positions:
+
+homeX = (x - width/2) * scale
+homeY = -(y - height/2) * scale
+
+So the center in 3D space is (0, 0, 0) which makes sense - the image is centered.
+
+So direction from center to home is:
+dirX = homeX - 0 = homeX
+dirY = homeY - 0 = homeY
+
+Normalize that vector, multiply by random distance.
+
+So burstX = homeX + normalize(homeX, homeY).x * randomDistance
+burstY = homeY + normalize(homeX, homeY).y * randomDistance
+burstZ = 0 + random depth (if they want depth)
+
+This gives a radial burst outward from center.
+
+Let me present this conceptually without writing code, since I'm in plan mode.
+
+Good — origin is (width/2, height/2) in pixel space, which maps to (0, 0, 0) in 3D space (your home positions are already centered around zero).
+
+**Directional burst formula conceptually:**
+
+```
+// For each particle:
+homeX = (x - width/2) * scale
+homeY = -(y - height/2) * scale
+
+// Direction is just the normalized home position (pointing away from center)
+dirX = homeX / length(homeX, homeY)
+dirY = homeY / length(homeX, homeY)
+
+// Each particle picks a random distance (e.g. 2 to 6 units)
+randomDist = 2 + Math.random() * 4
+
+burstX = homeX + dirX * randomDist
+burstY = homeY + dirY * randomDist
+burstZ = random depth (like -1 to -3)
+```
+
+- Particles at center barely move (dir is small)
+- Particles at edges fly far outward
+- All burst positions store once, never recalculate
+
+Does that formula make sense? Want to talk through what happens to a center pixel vs an edge pixel with this approach?
+
+---
+
+## User
+
+length(homeX, homeY)
+ what is this ?
+
+---
+
+## Assistant (Plan · Big Pickle · 5.2s)
+
+_Thinking:_
+
+The user is asking what `length(homeX, homeY)` means. This is a conceptual/teaching moment, not a code edit request. I should explain it simply.
+
+`length(homeX, homeY)` = `sqrt(homeX² + homeY²)`.
+
+It's the distance from the center (0,0) to the particle's home position.
+
+When you do `dirX = homeX / length`, you're **normalizing** — scaling the vector to length 1 while keeping its direction. So `dirX` tells you "which way is outward" without the "how far" part.
+
+Then `burstX = homeX + dirX * randomDist` means: start at home, then walk `randomDist` units in the outward direction. Every particle moves outward, but by a random distance.
+
+Without dividing by length, a far-away particle would fly way farther than a near-center particle for the same `randomDist` — which wouldn't be a clean directional burst.
+
+---
+
+## User
+
+nah let it be random random will be more cool
+
+---
+
+## Assistant (Plan · Big Pickle · 8.4s)
+
+_Thinking:_
+
+The user wants to keep it random instead of directional. They're in plan mode - no edits allowed. They seem satisfied with keeping the burst random rather than directional. Let me keep guiding them conceptually. 
+
+They just said "nah let it be random random will be more cool" - meaning they're rejecting the directional burst approach and want to keep random scatter. That's fine. My job is to guide them conceptually.
+
+We're currently in plan mode (read-only). I should acknowledge their choice and help them think through the next conceptual step. The next smallest step after having a `burstPositions` array would be to actually use it - meaning introduce the state machine and lerp mechanism.
+
+But they need to understand the mental model first. The key insight is: the `geometry.attributes.position.array` stores the *current* position that Three.js renders. Each frame, you overwrite it with values computed from `homePositions` and `burstPositions` using an `explodeAmount` float (0 = home, 1 = burst).
+
+I should ask the next conceptual question to keep them thinking.
+
+Fair enough. Random scatter works and looks chaotic which fits the vibe.
+
+Now the next smallest step conceptually:
+
+You have `positions` (home) and `burstPositions` stored. But right now, the geometry attribute only reads from `positions`. Nothing reads from `burstPositions` yet.
+
+**Question:** What would have to change in your `onload` callback so that after creating the geometry, you still have the burst data available for later use?
+
+Hint: look at how `imageParticleGeometry` is created around line 93. The `setAttribute('position', ...)` only uses `positions`. What would you need to do differently so that `burstPositions` survives past the `onload` callback?
+
+---
+
