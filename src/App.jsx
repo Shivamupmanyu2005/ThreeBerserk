@@ -10,9 +10,12 @@ import griffithTextureUrl from './assets/griffith.jpg';
 import gutsTextureUrl from './assets/guts.jpg';
 import godhandTextureUrl from './assets/godhand.jpg'
 import handOfGodTextureUrl from './assets/handofgod.png';
-import rest from './assets/rest.png'
+import rest from './assets/rest.png';
+import voidImageTexture from './assets/void.jpg';
+import storyImage from './assets/story.jpg';
+
 import './index.css'
-import { texture } from 'three/tsl';
+
 
 
 
@@ -30,7 +33,7 @@ function App() {
   const textHoveredRef = useRef(false)
   const thirdSectionHoveredRef = useRef(false)
 
-  let mouseCoordRef = useRef({x:0.5, y:0.5});
+  let mouseCoordRef = useRef({ x: 0.5, y: 0.5 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,6 +48,11 @@ function App() {
     );
     camera.position.set(0, 2.4, 8);
     scene.add(camera);
+
+    let restOriginalPositions;
+    let restBurstPositions;
+    let restDissolve = 0;
+    let restBurstTimer = 0;
 
     let imageParticleGeometry;
     let imagePointMaterial;
@@ -75,6 +83,10 @@ function App() {
       const width = imgData.width;
       const step = 4;
       const scale = restImageScale;
+      const vpDist = 7;
+      const vpHeight = 2 * Math.tan(THREE.MathUtils.degToRad(55 * 0.5)) * vpDist;
+      const vpWidth = vpHeight * (window.innerWidth / window.innerHeight);
+      const spreadZ = 2;
 
       for (let y = 0; y < height; y += step) {
         for (let x = 0; x < width; x += step) {
@@ -86,12 +98,23 @@ function App() {
 
           if (a > 50) {
             positions.push((x - width / 2) * scale, -(y - height / 2) * scale, 0);
-            burstPositions.push(x*Math.random()*500*scale, -y*Math.random()*500*scale,0)
+            burstPositions.push(
+              (Math.random() - 0.5) * vpWidth,
+              (Math.random() - 0.5) * vpHeight,
+              (Math.random() - 0.5) * spreadZ
+
+            )
             colors.push(r / 255, g / 255, b / 255);
+
           }
 
+
         }
+
       }
+      restOriginalPositions = new Float32Array(positions);
+
+      restBurstPositions = new Float32Array(burstPositions);
 
       imageParticleGeometry = new THREE.BufferGeometry();
       imageParticleGeometry.setAttribute(
@@ -123,6 +146,8 @@ function App() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x070303);
+    let animationId;
+    let timer;
 
     scene.add(new THREE.AmbientLight(0x4a1713, 1.2));
 
@@ -139,7 +164,7 @@ function App() {
     let textDissolve = 0;
     let sandAmount = 0;
 
-   
+
 
 
 
@@ -240,7 +265,6 @@ function App() {
       godhandMaterial.color.set(0xffffff);
       godhandMaterial.needsUpdate = true;
       fitgodHnadToViewPort();
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     });
 
     const handOfGodMaterial = new THREE.ShaderMaterial({
@@ -369,7 +393,6 @@ function App() {
       handOfGodMaterial.uniforms.uMap.value = texture;
       handOfGodMaterial.needsUpdate = true;
       fitHandOfGodToViewport();
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     });
 
 
@@ -384,7 +407,7 @@ function App() {
     })
 
     const restPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(1,1),
+      new THREE.PlaneGeometry(1, 1),
       restMaterial
     )
 
@@ -393,14 +416,282 @@ function App() {
       restMaterial.map = texture
       restMaterial.color.set(0xffffff)
       restMaterial.needsUpdate = true;
-       restPlane.scale.set(texture.image.width * restImageScale,texture.image.height * restImageScale, 1)
+      restPlane.scale.set(texture.image.width * restImageScale, texture.image.height * restImageScale, 1)
     })
 
     restPlane.position.set(0, 0, -7);
-   
+
 
     restPlane.renderOrder = 11
-  camera.add(restPlane)
+    camera.add(restPlane)
+
+
+
+
+
+
+    const voidMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+      uniforms: {
+        uMap: { value: null },
+        uTime: { value: 0 },
+        uReveal: { value: 0 },
+        uOpacity: { value: 0 }
+      },
+      vertexShader: `
+    varying vec2 vUv;
+
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`,
+      fragmentShader: `
+    uniform sampler2D uMap;
+    uniform float uTime;
+    uniform float uReveal;
+    uniform float uOpacity;
+
+    varying vec2 vUv;
+
+    float hash(vec2 p) {
+      p = fract(p * vec2(127.1, 311.7));
+      p += dot(p, p + 74.7);
+      return fract(p.x * p.y);
+    }
+
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
+    float fbm(vec2 p) {
+      float value = 0.0;
+      float amplitude = 0.5;
+
+      for (int i = 0; i < 5; i++) {
+        value += noise(p) * amplitude;
+        p *= 2.08;
+        amplitude *= 0.52;
+      }
+
+      return value;
+    }
+
+    void main() {
+      vec4 image = texture2D(uMap, vUv);
+
+      // --- VOID RECESSION (Reverse Reveal) ---
+      // The void recedes from center outward as uReveal grows
+      float edgeDist = max(abs(vUv.x - 0.5), abs(vUv.y - 0.5));
+      float recedeStrength = smoothstep(0.0, 1.0, uReveal);
+      float noiseDrift = fbm(vUv * 5.0 + uTime * 0.06);
+      float voidThreshold = 0.25 + recedeStrength * 0.55;
+      float voidPresence = smoothstep(
+        voidThreshold - 0.15,
+        voidThreshold + 0.15,
+        noiseDrift + edgeDist * 0.7
+      );
+
+      // Where void is present â†’ pure black
+      vec3 voidColor = mix(image.rgb, vec3(0.0), voidPresence);
+      float voidAlpha = max(image.a, voidPresence * 0.85);
+
+      // --- NEGATIVE FLICKER ---
+      // Random intervals, brief instant inversion
+      float flickerInterval = 0.35;
+      float flickerSeed = hash(vec2(floor(uTime * flickerInterval)));
+      float flickerTrigger = step(0.7, flickerSeed);
+      float flickerPhase = fract(uTime * flickerInterval);
+      float flickerActive = flickerTrigger * step(flickerPhase, 0.08);
+
+      vec3 finalColor = mix(voidColor, 1.0 - voidColor, flickerActive);
+      float finalAlpha = mix(voidAlpha, 1.0, flickerActive * 0.4);
+
+      // --- BREATHING PULSE ---
+      float pulse = 0.92 + 0.08 * sin(uTime * 0.5 + vUv.y * 3.0);
+
+      // --- SCREEN BORDER DARKENING ---
+      float vignette = 1.0 - smoothstep(0.2, 0.7, edgeDist) * 0.35;
+
+      float alpha = finalAlpha * uOpacity * pulse * vignette;
+
+      gl_FragColor = vec4(finalColor * pulse, alpha);
+    }
+`
+    });
+
+    const voidIdea = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      voidMaterial
+    )
+
+    voidIdea.position.set(0, 0, -1);
+    voidIdea.renderOrder = 8
+    camera.add(voidIdea)
+    let voidAspectRatio = 5 / 7;
+    const voidBaseScale = new THREE.Vector2()
+
+    function fitVoidinViewPort() {
+      const distance = Math.abs(voidIdea.position.z);
+      const viewportHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * distance;
+      const viewportWidth = viewportHeight * camera.aspect;
+      const viewportAspect = viewportWidth / viewportHeight;
+      const overscan = 1.008;
+
+      if (viewportAspect > voidAspectRatio) {
+        voidBaseScale.set(
+          viewportWidth * overscan,
+          (viewportWidth / voidAspectRatio) * overscan
+        )
+      } else {
+        voidBaseScale.set(
+          viewportHeight * voidAspectRatio * overscan,
+          viewportHeight * overscan
+        )
+      }
+
+    }
+    textureLoader.load(voidImageTexture, (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      voidAspectRatio = texture.image.width / texture.image.height;
+      voidMaterial.uniforms.uMap.value = texture;
+      voidMaterial.needsUpdate = true;
+      fitVoidinViewPort()
+    })
+
+    // --- STORY SETUP (TV Glitch Effect) ---
+    const storyMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+      uniforms: {
+        uMap: { value: null },
+        uTime: { value: 0 },
+        uReveal: { value: 0 },
+        uGlitch: { value: 0 }
+      },
+      vertexShader: `
+    varying vec2 vUv;
+
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`,
+      fragmentShader: `
+    uniform sampler2D uMap;
+    uniform float uTime;
+    uniform float uReveal;
+    uniform float uGlitch;
+
+    varying vec2 vUv;
+
+    float hash(vec2 p) {
+      p = fract(p * vec2(127.1, 311.7));
+      p += dot(p, p + 74.7);
+      return fract(p.x * p.y);
+    }
+
+    void main() {
+      vec4 image = texture2D(uMap, vUv);
+
+      // --- HORIZONTAL TEARING ---
+      float tearSeed = hash(vec2(floor(vUv.y * 400.0 + uTime * 2.0), 0.0));
+      float tearLine = step(0.93, tearSeed);
+      float tearStrength = smoothstep(0.0, 0.6, uGlitch);
+      float tear = tearLine * tearStrength;
+
+      float shift = hash(vec2(floor(vUv.y * 400.0), 0.0)) * 0.4;
+      vec2 tearUv = vUv;
+      tearUv.x = mix(vUv.x, vUv.x + shift, tear);
+
+      // --- COLOR CHANNEL OFFSET (RGB split) ---
+      float chStrength = smoothstep(0.2, 0.7, uGlitch);
+      float chSeed = hash(vec2(floor(vUv.y * 200.0 + uTime * 4.0), 0.0));
+      float chOff = chSeed * chStrength * 0.04;
+
+      float r = texture2D(uMap, tearUv + vec2(chOff, 0)).r;
+      float g = texture2D(uMap, tearUv).g;
+      float b = texture2D(uMap, tearUv - vec2(chOff, 0)).b;
+
+      // --- STATIC NOISE (TV snow) ---
+      float staticStrength = smoothstep(0.5, 1.0, uGlitch);
+      float staticNoise = hash(vec2(vUv * 2000.0 + uTime * 150.0));
+
+      vec3 clean = vec3(r, g, b);
+      vec3 noisy = mix(clean, vec3(staticNoise), 0.7);
+      vec3 finalColor = mix(clean, noisy, staticStrength);
+
+      vec3 torn = texture2D(uMap, tearUv).rgb;
+      finalColor = mix(finalColor, torn, tear * (1.0 - staticStrength));
+
+      // --- SCAN LINES ---
+      float scanlines = 0.93 + 0.07 * sin(vUv.y * 600.0 + uTime * 3.0);
+      finalColor *= scanlines;
+
+      // --- VIGNETTE ---
+      float edgeDist = max(abs(vUv.x - 0.5), abs(vUv.y - 0.5));
+      float vignette = 1.0 - smoothstep(0.2, 0.6, edgeDist) * 0.35;
+
+      // --- FINAL ---
+      float glitchMask = 1.0 - uGlitch * 0.5;
+      float alpha = uReveal * glitchMask * image.a;
+
+      gl_FragColor = vec4(finalColor * vignette, alpha);
+    }
+`
+    });
+
+    const storyMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      storyMaterial
+    );
+
+    storyMesh.position.set(0, 0, -1);
+    storyMesh.renderOrder = 10;
+    camera.add(storyMesh);
+
+    let storyAspectRatio = 16 / 9;
+    const storyBaseScale = new THREE.Vector2();
+
+    function fitStoryToViewport() {
+      const distance = Math.abs(storyMesh.position.z);
+      const vh = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * distance;
+      const vw = vh * camera.aspect;
+      const vpAspect = vw / vh;
+      const overscan = 1.008;
+
+      if (vpAspect > storyAspectRatio) {
+        storyBaseScale.set(vw * overscan, (vw / storyAspectRatio) * overscan);
+      } else {
+        storyBaseScale.set(vh * storyAspectRatio * overscan, vh * overscan);
+      }
+    }
+
+    textureLoader.load(storyImage, (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      storyAspectRatio = texture.image.width / texture.image.height;
+      storyMaterial.uniforms.uMap.value = texture;
+      storyMaterial.needsUpdate = true;
+      fitStoryToViewport();
+    });
+
+    let nextGlitchTime = 5 + Math.random() * 10;
+    let storyGlitch = 0;
+
     // --- SWORD SETUP (Unchanged) ---
     const sword = new THREE.Group();
     const swordMaterial = new THREE.MeshBasicMaterial({
@@ -422,7 +713,6 @@ function App() {
       swordMaterial.map = texture;
       swordMaterial.color.set(0xffffff);
       swordMaterial.needsUpdate = true;
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     });
 
     const fate = new THREE.Group();
@@ -526,7 +816,6 @@ function App() {
       texture.colorSpace = THREE.SRGBColorSpace;
       fateMaterial.uniforms.uMap.value = texture;
       fateMaterial.needsUpdate = true;
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     })
 
 
@@ -639,10 +928,9 @@ function App() {
     // --- INTERACTIVITY SETUP (Unchanged) ---
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2(2, 2);
-    const timer = new THREE.Timer();
+    timer = new THREE.Timer();
     timer.connect(document);
 
-    let animationId;
     let swordHovered = false;
     let behelithHovered = false;
     let behelithHoverScale = 1;
@@ -687,6 +975,8 @@ function App() {
       camera.updateProjectionMatrix();
       fitEclipseToViewport();
       fitHandOfGodToViewport();
+      fitVoidinViewPort()
+      fitStoryToViewport();
       rebuildTextParticles();
       updateScrollTarget();
     }
@@ -892,7 +1182,7 @@ function App() {
 
     rebuildTextParticles();
     let normalisedRadius = 0.22;
-  
+
 
     const handleMouseMove = (e) => {
       const section = document.querySelector('#eclipse');
@@ -915,28 +1205,28 @@ function App() {
       const relativeX = e.clientX - sectionrect.left;
       const relativeY = e.clientY - sectionrect.top;
 
-      const normalizedX = relativeX/ sectionrect.width;
+      const normalizedX = relativeX / sectionrect.width;
       const normalizedY = relativeY / sectionrect.height
-      
-      let finalX = normalizedX
-      let finalY = 1-normalizedY
 
-      if(finalX < 0 ){
+      let finalX = normalizedX
+      let finalY = 1 - normalizedY
+
+      if (finalX < 0) {
         finalX = 0
-      } else if( finalX > 1){
+      } else if (finalX > 1) {
         finalX = 1
       }
 
-      if(finalY < 0){
+      if (finalY < 0) {
         finalY = 0
-      } else if(finalY > 1){
+      } else if (finalY > 1) {
         finalY = 1
       }
 
-      mouseCoordRef.current = {x:finalX, y:finalY}
+      mouseCoordRef.current = { x: finalX, y: finalY }
 
     }
-window.addEventListener('mousemove',handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove);
 
 
 
@@ -1040,7 +1330,9 @@ window.addEventListener('mousemove',handleMouseMove);
 
       )
 
-      const handOfGodReveal = THREE.MathUtils.smoothstep(scrollProgress, 0.72, 1.0);
+      const revealIn = THREE.MathUtils.smoothstep(scrollProgress, 0.40, 0.55);
+      const revealOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.55, 0.65);
+      const handOfGodReveal = revealIn * revealOut;
       const isThirdSectionHovered = thirdSectionHoveredRef.current;
       sandAmount = THREE.MathUtils.damp(
         sandAmount,
@@ -1051,7 +1343,7 @@ window.addEventListener('mousemove',handleMouseMove);
       const actualSand = handOfGodReveal * sandAmount;
       let mouseX = mouseCoordRef.current.x;
       let mouseY = mouseCoordRef.current.y;
-      
+
 
       const handOfGodPulse = 1 + Math.sin(time * 0.00045) * 0.012;
       handOfGod.scale.set(
@@ -1066,14 +1358,42 @@ window.addEventListener('mousemove',handleMouseMove);
       handOfGodMaterial.uniforms.uMouse.value.set(mouseX, mouseY);
       handOfGodMaterial.uniforms.uRadius.value = normalisedRadius || 0.11;
 
-      if (imagePointMaterial) {
-         imagePointMaterial.opacity = handOfGodReveal * 0.35
+
+      const voidrevealIn = THREE.MathUtils.smoothstep(scrollProgress, 0.6, 0.8);
+      const voidrevealOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.7, 0.9);
+      const voidVisibility = voidrevealIn * voidrevealOut
+
+      voidMaterial.uniforms.uTime.value = time * 0.001;
+      voidMaterial.uniforms.uReveal.value = voidrevealIn;
+      voidMaterial.uniforms.uOpacity.value = voidVisibility;
+
+
+      const voidBreath = 1 + Math.sin(time * 0.0005) * 0.013;
+      voidIdea.scale.set(voidBaseScale.x * voidBreath, voidBaseScale.y * voidBreath, 1)
+
+      // --- STORY SECTION (TV Glitch) ---
+      const storyReveal = THREE.MathUtils.smoothstep(scrollProgress, 0.8, 1.0);
+      const sec = time * 0.001;
+
+      if (sec > nextGlitchTime) {
+        storyGlitch = Math.min(1, storyGlitch + delta * 3.3);
+        if (storyGlitch >= 1) {
+          nextGlitchTime = sec + 5 + Math.random() * 10;
+        }
+      } else {
+        storyGlitch = Math.max(0, storyGlitch - delta * 0.67);
       }
 
-      restMaterial.opacity = handOfGodReveal ;
+      storyMaterial.uniforms.uTime.value = sec;
+      storyMaterial.uniforms.uReveal.value = storyReveal;
+      storyMaterial.uniforms.uGlitch.value = storyGlitch;
 
-
-
+      const storyBreath = 1 + Math.sin(sec * 0.5) * 0.013;
+      storyMesh.scale.set(
+        storyBaseScale.x * storyBreath,
+        storyBaseScale.y * storyBreath,
+        1
+      );
 
       // --- CAMERA & SCROLL MOVEMENT ---
       camera.position.x = THREE.MathUtils.lerp(0, 0.8, scrollProgress);
@@ -1097,24 +1417,24 @@ window.addEventListener('mousemove',handleMouseMove);
 
       // GRIFFITH FADE LOGIC
       // smoothstep returns 0 to 1 as scrollProgress goes from 0.1 to 0.3
-      const redBgFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.1, 0.35);
+      const redBgFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.06, 0.21);
       eclipseMaterial.opacity = redBgFadeOut;
-      const godhandFadeIn = THREE.MathUtils.smoothstep(scrollProgress, 0.15, 0.35);
+      const godhandFadeIn = THREE.MathUtils.smoothstep(scrollProgress, 0.09, 0.21);
       godhandMaterial.opacity = godhandFadeIn;
 
-      const godhandFadeout = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.6, 0.8);
+      const godhandFadeout = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.36, 0.48);
       godhandMaterial.opacity = godhandFadeout * godhandFadeIn;
 
 
-      const swordFadeout = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.15, 0.35);
+      const swordFadeout = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.09, 0.21);
       swordMaterial.opacity = swordFadeout
 
-      const behelithFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.15, 0.35);
+      const behelithFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.09, 0.21);
       behelithMaterial.opacity = behelithFadeOut
 
-      const FatefadeIn = THREE.MathUtils.smoothstep(scrollProgress, 0.25, 0.45);
+      const FatefadeIn = THREE.MathUtils.smoothstep(scrollProgress, 0.15, 0.27);
 
-      const FateFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.5, 0.7);
+      const FateFadeOut = 1 - THREE.MathUtils.smoothstep(scrollProgress, 0.3, 0.42);
       const fateVisibility = FateFadeOut * FatefadeIn;
       fateMaterial.uniforms.uTime.value = time * 0.001;
       fateMaterial.uniforms.uReveal.value = FatefadeIn;
@@ -1189,7 +1509,9 @@ window.addEventListener('mousemove',handleMouseMove);
           textTargetPositions[index + 2],
           textBurstPositions[index + 2],
           textDissolve
+
         );
+
 
         textPositions[index] = Number.isFinite(particleX) ? particleX : 0;
         textPositions[index + 1] = Number.isFinite(particleY) ? particleY : 0;
@@ -1198,6 +1520,42 @@ window.addEventListener('mousemove',handleMouseMove);
 
       textParticleMaterial.opacity = THREE.MathUtils.smoothstep(textDissolve, 0.02, 0.2) * 0.95;
       textParticleGeometry.attributes.position.needsUpdate = true
+
+      restBurstTimer += delta
+
+      const cycletime = restBurstTimer % 6;
+      if (cycletime < 1.2) {
+        restDissolve = cycletime / 1.2;          // 0 â†’ 1
+      } else if (cycletime < 3.2) {
+        restDissolve = 1;                        // hold at 1
+      } else if (cycletime < 4.4) {
+        restDissolve = 1 - (cycletime - 3.2) / 1.2;  // 1 â†’ 0
+      } else {
+        restDissolve = 0;                        // hold at 0
+      }
+
+      if (restOriginalPositions && restBurstPositions) {
+
+        const pos = imageParticleGeometry.attributes.position.array;
+        for (let i = 0; i < pos.length; i++) {
+          pos[i] = restOriginalPositions[i] + (restBurstPositions[i] - restOriginalPositions[i]) * restDissolve;
+
+
+        }
+        imageParticleGeometry.attributes.position.needsUpdate = true;
+
+      }
+
+      if (imagePointMaterial) {
+        imagePointMaterial.opacity = handOfGodReveal * THREE.MathUtils.lerp(0.5, 1, restDissolve)
+      }
+
+
+      restMaterial.opacity = handOfGodReveal * (1 - restDissolve);
+
+
+
+
 
 
 
@@ -1214,7 +1572,7 @@ window.addEventListener('mousemove',handleMouseMove);
     // --- CLEANUP (Updated to include new characters) ---
     return () => {
       window.cancelAnimationFrame(animationId);
-      timer.dispose();
+      timer?.dispose();
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerleave', handlePointerLeave);
       canvas.removeEventListener('click', handleClick);
@@ -1232,6 +1590,14 @@ window.addEventListener('mousemove',handleMouseMove);
       handOfGod.geometry.dispose();
       handOfGodMaterial.uniforms.uMap.value?.dispose();
       handOfGodMaterial.dispose();
+
+      voidIdea.geometry.dispose();
+      voidMaterial.uniforms.uMap.value?.dispose();
+      voidMaterial.dispose();
+
+      storyMesh.geometry.dispose();
+      storyMaterial.uniforms.uMap.value?.dispose();
+      storyMaterial.dispose();
 
       swordImage.geometry.dispose();
       swordMaterial.map?.dispose();
@@ -1267,8 +1633,8 @@ window.addEventListener('mousemove',handleMouseMove);
 
       textParticleGeometry.dispose();
       textParticleMaterial.dispose();
-      window.removeEventListener('mousemove',handleMouseMove)
-      renderer.dispose();
+      window.removeEventListener('mousemove', handleMouseMove)
+      renderer?.dispose();
     };
   }, []);
 
@@ -1313,32 +1679,32 @@ window.addEventListener('mousemove',handleMouseMove);
               ref={struggleHeadingRef}
               className="max-w-155 text-4xl font-extrabold uppercase leading-[0.96] [text-shadow:0_8px_36px_rgba(0,0,0,0.8)] md:text-7xl lg:text-8xl text-shadow-lg text-shadow-neutral-950 transition-opacity duration-500"
               onMouseEnter={(e) => {
-                e.currentTarget.classList.add('opacity-0'); 
+                e.currentTarget.classList.add('opacity-0');
                 textHoveredRef.current = true;
-                
+
               }}
               onMouseLeave={(e) => {
-                 e.currentTarget.classList.remove('opacity-0');
-                 textHoveredRef.current = false; 
+                e.currentTarget.classList.remove('opacity-0');
+                textHoveredRef.current = false;
               }}
             >
               Struggle against fate.
             </h2>
             <p className='mt-6 max-w-130 text-1   text-white text-shadow-lg text-shadow-neutral-800 md:text-xl'>
               In this world,  is the destiny of mankind controlled by some transcendental entity or law?
-              Is it like the hand of God hovering above?At least it is true; that man has no control —even over his own will..
+              Is it like the hand of God hovering above?At least it is true; that man has no control â€”even over his own will..
             </p>
           </div>
         </section>
 
         <section id="eclipse" className={`${sectionClasses} pointer-events-auto`}
-        onMouseEnter={() => thirdSectionHoveredRef.current = true}
-        onMouseLeave={() => {
-          thirdSectionHoveredRef.current = false
-          mouseCoordRef.current = {x:0.5, y: 0.5}
-        }
-          
-        }
+          onMouseEnter={() => thirdSectionHoveredRef.current = true}
+          onMouseLeave={() => {
+            thirdSectionHoveredRef.current = false
+            mouseCoordRef.current = { x: 0.5, y: 0.5 }
+          }
+
+          }
         >
           <div className="absolute inset-0 -z-10 bg-transparent md:bg-transparent" />
           <div className="w-full max-w-155 pointer-events-none">
@@ -1347,8 +1713,38 @@ window.addEventListener('mousemove',handleMouseMove);
               Even in darkness, move forward.
             </h2>
             <p className='mt-6 max-w-130 text-1  text-white text-shadow-lg text-shadow-cyan-500  md:text-xl'>
-              Struggle, challenge and 
+              Struggle, challenge and
               rise to struggle again
+            </p>
+          </div>
+        </section>
+
+        <section id="idea-of-evil" className={`${sectionClasses} pointer-events-auto`}>
+          <div className="absolute inset-0 -z-10 bg-transparent md:bg-transparent" />
+          <div className="w-full max-w-155 pointer-events-none">
+            <p className={eyebrowClasses}>The Idea of Evil</p>
+            <h2 className="max-w-155 text-4xl font-extrabold uppercase leading-[0.96] [text-shadow:0_8px_36px_rgba(0,0,0,0.8)] md:text-7xl lg:text-8xl">
+              Born from darkness.
+            </h2>
+            <p className='mt-6 max-w-130 text-1 text-white text-shadow-lg text-shadow-neutral-800 md:text-xl'>
+              An entity conceived from humanity's collective suffering â€” a will that shaped causality itself.
+              The Idea of Evil is the reason behind every tragedy, every monster, every brand of sacrifice.
+              It is the God of this world, born not from light, but from our own despair.
+            </p>
+          </div>
+        </section>
+
+        <section id="current-status" className={`${sectionClasses} md:justify-end md:text-right pointer-events-auto`}>
+          <div className="absolute inset-0 -z-10 bg-transparent md:bg-transparent" />
+          <div className="w-full max-w-155 pointer-events-none">
+            <p className={eyebrowClasses}>Where we stand</p>
+            <h2 className="max-w-155 text-4xl font-extrabold uppercase leading-[0.96] [text-shadow:0_8px_36px_rgba(0,0,0,0.8)] md:text-7xl lg:text-8xl">
+              The journey continues.
+            </h2>
+            <p className='mt-6 max-w-130 text-1 text-white text-shadow-lg text-shadow-neutral-800 md:text-xl'>
+              After Miura's passing, the story of Guts and Casca carries forward under Kouji Mori and Studio Gaga.
+              The Elf Island arc unfolds â€” Casca's mind restored, but the wounds of the past remain.
+              Fantasia has begun, and the God Hand stirs. The struggle is far from over.
             </p>
           </div>
         </section>
